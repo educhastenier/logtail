@@ -1,0 +1,13 @@
+2024-09-30T10:30:45.123Z INFO Application started successfully
+2024-09-30T10:30:46.456Z DEBUG Loading configuration from config.json
+2024-09-30T10:30:47.789Z INFO Database connection established
+2024-09-30T10:30:48.012Z WARN Configuration key 'timeout' not found, using default value
+2024-09-30T10:30:49.345Z ERROR Failed to connect to Redis: connection refused
+2024-09-30T10:30:50.678Z INFO Retrying Redis connection...
+2024-09-30T10:30:51.901Z FATAL Unable to start server: port 8080 already in use
+Sep 30 10:30:52 nginx[1234]: access denied for user from 192.168.1.100
+2024/09/30 10:30:53 [ERROR] Database query failed: table 'users' doesn't exist
+[WARN] 2024-09-30 10:30:54 Deprecation warning: API v1 will be removed in next release
+Some unstructured log line without level
+Another line with error keyword but no formal level
+2024-09-30T10:30:55.999Z INFO Server shutting down gracefully
