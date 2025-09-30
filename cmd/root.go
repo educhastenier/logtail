@@ -92,6 +92,7 @@ type FollowFile struct {
 	filename string
 	scanner  *bufio.Scanner
 	lineNum  int
+	position int64
 }
 
 func followFiles(filenames []string, filter *regexp.Regexp) error {
@@ -157,11 +158,15 @@ func followFiles(filenames []string, filter *regexp.Regexp) error {
 			return fmt.Errorf("error reading file %s: %v", filename, err)
 		}
 
+		// Get current position after reading existing content
+		position, _ := file.Seek(0, io.SeekCurrent)
+
 		files[i] = &FollowFile{
 			file:     file,
 			filename: filename,
 			scanner:  scanner,
 			lineNum:  lineNum,
+			position: position,
 		}
 	}
 
@@ -177,9 +182,29 @@ func followFiles(filenames []string, filter *regexp.Regexp) error {
 		hasNewContent := false
 
 		for _, f := range files {
+			// Check if file has grown
+			fileInfo, err := f.file.Stat()
+			if err != nil {
+				return fmt.Errorf("error getting file info for %s: %v", f.filename, err)
+			}
+
+			currentSize := fileInfo.Size()
+			if currentSize > f.position {
+				// File has grown, seek to our last position and create new scanner
+				_, err := f.file.Seek(f.position, io.SeekStart)
+				if err != nil {
+					return fmt.Errorf("error seeking in file %s: %v", f.filename, err)
+				}
+				f.scanner = bufio.NewScanner(f.file)
+			}
+
+			// Read any new lines
 			for f.scanner.Scan() {
 				hasNewContent = true
 				line := f.scanner.Text()
+
+				// Update position after reading the line
+				f.position, _ = f.file.Seek(0, io.SeekCurrent)
 
 				// Apply filter if defined
 				if filter != nil && !filter.MatchString(line) {
@@ -215,7 +240,7 @@ func followFiles(filenames []string, filter *regexp.Regexp) error {
 				f.lineNum++
 			}
 
-			// Check for scanner errors
+			// Check for scanner errors (but don't fail on EOF)
 			if err := f.scanner.Err(); err != nil {
 				return fmt.Errorf("error reading file %s: %v", f.filename, err)
 			}

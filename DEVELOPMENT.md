@@ -35,7 +35,6 @@ logtail/
 ├── go.mod                    # Dependencies
 ├── LICENSE                   # MIT License
 ├── README.md                 # Comprehensive documentation
-├── test.log                  # Sample test data
 ├── cmd/
 │   ├── root.go              # CLI implementation
 │   └── root_test.go         # Integration tests
