@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"time"
 
 	"logtail/internal/colorizer"
 	"logtail/internal/parser"
@@ -40,23 +41,6 @@ func init() {
 }
 
 func runLogTail(cmd *cobra.Command, args []string) error {
-	var readers []io.Reader
-
-	// If no file is specified, read from stdin
-	if len(args) == 0 {
-		readers = append(readers, os.Stdin)
-	} else {
-		// Open specified files
-		for _, filename := range args {
-			file, err := os.Open(filename)
-			if err != nil {
-				return fmt.Errorf("cannot open file %s: %v", filename, err)
-			}
-			defer file.Close()
-			readers = append(readers, file)
-		}
-	}
-
 	// Compile filter pattern if provided
 	var filter *regexp.Regexp
 	if filterPattern != "" {
@@ -67,17 +51,35 @@ func runLogTail(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Process each source
-	for i, reader := range readers {
+	// Handle stdin case
+	if len(args) == 0 {
+		return processLogs(os.Stdin, filter, "", false)
+	}
+
+	// Follow mode only works with files
+	if followMode {
+		return followFiles(args, filter)
+	}
+
+	// Normal mode: process files sequentially
+	for i, filename := range args {
 		if len(args) > 1 {
-			fmt.Printf("==> %s <==\n", args[i])
+			fmt.Printf("==> %s <==\n", filename)
 		}
 
-		if err := processLogs(reader, filter); err != nil {
+		file, err := os.Open(filename)
+		if err != nil {
+			return fmt.Errorf("cannot open file %s: %v", filename, err)
+		}
+
+		err = processLogs(file, filter, filename, false)
+		file.Close()
+
+		if err != nil {
 			return err
 		}
 
-		if i < len(readers)-1 {
+		if i < len(args)-1 {
 			fmt.Println()
 		}
 	}
@@ -85,7 +87,148 @@ func runLogTail(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func processLogs(reader io.Reader, filter *regexp.Regexp) error {
+type FollowFile struct {
+	file     *os.File
+	filename string
+	scanner  *bufio.Scanner
+	lineNum  int
+}
+
+func followFiles(filenames []string, filter *regexp.Regexp) error {
+	// For follow mode, we need to track file positions and watch for changes
+	files := make([]*FollowFile, len(filenames))
+
+	// Initialize files
+	for i, filename := range filenames {
+		file, err := os.Open(filename)
+		if err != nil {
+			return fmt.Errorf("cannot open file %s: %v", filename, err)
+		}
+
+		// First, read existing content from the beginning
+		scanner := bufio.NewScanner(file)
+		lineNum := 1
+
+		if len(filenames) > 1 {
+			fmt.Printf("==> %s <==\n", filename)
+		}
+
+		// Process existing content
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// Apply filter if defined
+			if filter != nil && !filter.MatchString(line) {
+				lineNum++
+				continue
+			}
+
+			// Parse the log line
+			logEntry := parser.ParseLogLine(line)
+
+			// Display the line
+			output := line
+			if colorOutput {
+				output = colorizer.ColorizeLogLine(logEntry, line)
+			}
+
+			// Add filename prefix for multiple files
+			if len(filenames) > 1 {
+				prefix := fmt.Sprintf("[%s] ", filename)
+				if showLineNum {
+					fmt.Printf("%s%6d: %s\n", prefix, lineNum, output)
+				} else {
+					fmt.Printf("%s%s\n", prefix, output)
+				}
+			} else {
+				if showLineNum {
+					fmt.Printf("%6d: %s\n", lineNum, output)
+				} else {
+					fmt.Println(output)
+				}
+			}
+
+			lineNum++
+		}
+
+		// Check for scanner errors
+		if err := scanner.Err(); err != nil {
+			file.Close()
+			return fmt.Errorf("error reading file %s: %v", filename, err)
+		}
+
+		files[i] = &FollowFile{
+			file:     file,
+			filename: filename,
+			scanner:  scanner,
+			lineNum:  lineNum,
+		}
+	}
+
+	// Cleanup
+	defer func() {
+		for _, f := range files {
+			f.file.Close()
+		}
+	}()
+
+	// Follow loop
+	for {
+		hasNewContent := false
+
+		for _, f := range files {
+			for f.scanner.Scan() {
+				hasNewContent = true
+				line := f.scanner.Text()
+
+				// Apply filter if defined
+				if filter != nil && !filter.MatchString(line) {
+					f.lineNum++
+					continue
+				}
+
+				// Parse the log line
+				logEntry := parser.ParseLogLine(line)
+
+				// Display the line
+				output := line
+				if colorOutput {
+					output = colorizer.ColorizeLogLine(logEntry, line)
+				}
+
+				// Add filename prefix for multiple files
+				if len(filenames) > 1 {
+					prefix := fmt.Sprintf("[%s] ", f.filename)
+					if showLineNum {
+						fmt.Printf("%s%6d: %s\n", prefix, f.lineNum, output)
+					} else {
+						fmt.Printf("%s%s\n", prefix, output)
+					}
+				} else {
+					if showLineNum {
+						fmt.Printf("%6d: %s\n", f.lineNum, output)
+					} else {
+						fmt.Println(output)
+					}
+				}
+
+				f.lineNum++
+			}
+
+			// Check for scanner errors
+			if err := f.scanner.Err(); err != nil {
+				return fmt.Errorf("error reading file %s: %v", f.filename, err)
+			}
+		}
+
+		// If no new content, sleep briefly before checking again
+		if !hasNewContent {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+func processLogs(reader io.Reader, filter *regexp.Regexp, filename string, isFollow bool) error {
 	scanner := bufio.NewScanner(reader)
 	lineNum := 1
 

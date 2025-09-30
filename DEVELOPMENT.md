@@ -14,6 +14,7 @@
 - ✅ **Multi-file Processing**: Can process multiple files simultaneously
 - ✅ **stdin Support**: Works with pipes and redirections
 - ✅ **Line Numbering**: Optional line number display
+- ✅ **Follow Mode**: Real-time file following like `tail -f`
 
 ### Log Level Support
 - ERROR, WARN, INFO, DEBUG, TRACE, FATAL
@@ -78,6 +79,12 @@ logtail/
 
 # Process multiple files
 ./logtail app.log error.log access.log
+
+# Follow log files in real-time
+./logtail --follow app.log
+
+# Follow multiple files with filtering  
+./logtail -F -f "ERROR|WARN" app.log error.log
 
 # Use with pipes
 tail -f app.log | ./logtail -f "ERROR"

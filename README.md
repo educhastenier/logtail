@@ -8,7 +8,7 @@ An intelligent log analyzer for developers, written in Go.
 - 🔍 **Real-time filtering** : Regular expression support for log filtering
 - 📊 **Smart parser** : Automatic detection of timestamps, log levels and messages
 - 📝 **Line numbering** : Option to display line numbers
-- 🔄 **Follow mode** : Real-time file following (coming soon)
+- 🔄 **Follow mode** : Real-time file following like `tail -f`
 - 📁 **Multi-file support** : Process multiple files simultaneously
 
 ## Installation
@@ -45,7 +45,17 @@ cat app.log | ./logtail
 ./logtail -n app.log
 
 # Disable coloring
-./logtail -c=false app.log
+# Follow log files in real-time
+./logtail --follow app.log
+
+# Follow multiple log files with filtering
+./logtail -F -f "ERROR|WARN" app.log error.log
+
+# Use with pipes
+tail -f app.log | ./logtail -f "ERROR"
+
+# Disable colors for scripting
+./logtail -c=false app.log > filtered.log
 
 # Process multiple files
 ./logtail app.log error.log access.log
@@ -56,7 +66,7 @@ cat app.log | ./logtail
 - `-f, --filter` : Filter with regular expression
 - `-c, --color` : Enable/disable coloring (default: true)
 - `-n, --line-numbers` : Show line numbers
-- `-F, --follow` : Follow file like tail -f (coming soon)
+- `-F, --follow` : Follow file like tail -f for real-time monitoring
 
 ## Development
 
@@ -136,7 +146,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Roadmap
 
-- [ ] Follow mode (`-F, --follow`)
+- [x] Follow mode (`-F, --follow`)
 - [ ] Export to different formats (JSON, CSV)
 - [ ] Log statistics (counters per level)
 - [ ] Common error pattern detection

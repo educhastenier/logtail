@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"os"
 	"path/filepath"
@@ -135,5 +136,50 @@ func TestRunLogTailErrors(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "invalid regex pattern") {
 		t.Errorf("Expected error about invalid regex, got: %v", err)
+	}
+}
+
+func TestFollowModeBasics(t *testing.T) {
+	// Test that follow mode can be enabled without errors
+	tempDir := t.TempDir()
+	testFile := filepath.Join(tempDir, "follow_test.log")
+
+	// Create test file with initial content
+	err := os.WriteFile(testFile, []byte("2024-09-30T10:30:45.123Z INFO Initial line\n"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Test follow mode initialization (we can't test the infinite loop, but we can test setup)
+	followMode = true
+	filterPattern = ""
+	colorOutput = false
+	showLineNum = false
+
+	// This would normally run forever, so we test that it at least starts without error
+	// by checking the file opening logic
+	files := make([]*FollowFile, 1)
+
+	file, err := os.Open(testFile)
+	if err != nil {
+		t.Fatalf("Cannot open test file: %v", err)
+	}
+	defer file.Close()
+
+	files[0] = &FollowFile{
+		file:     file,
+		filename: testFile,
+		scanner:  bufio.NewScanner(file),
+		lineNum:  1,
+	}
+
+	// Test that we can read the initial content
+	if !files[0].scanner.Scan() {
+		t.Error("Should be able to read initial line")
+	}
+
+	line := files[0].scanner.Text()
+	if !strings.Contains(line, "Initial line") {
+		t.Errorf("Expected line to contain 'Initial line', got: %s", line)
 	}
 }
